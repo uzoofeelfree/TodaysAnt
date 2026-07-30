@@ -20,6 +20,12 @@
   let beginInFlight = null;
 
   const migrationKey = userId => `todaysant:migration-resolved:v1:${userId}`;
+  const accountCacheKey = userId => `todaysant:account-cache:v1:${userId}`;
+  const emptyData = () => ({
+    projects: [],
+    activeId: null,
+    profile: { nickname: '', greeting: '안녕하세요! 개미는 오늘도 일합니다 🐜', projectSort: 'urgent' }
+  });
   const migrationResolved = userId => Boolean(localStorage.getItem(migrationKey(userId)));
   const rememberMigration = (userId, choice) => {
     localStorage.setItem(migrationKey(userId), JSON.stringify({ choice, resolvedAt: new Date().toISOString() }));
@@ -53,6 +59,7 @@
     data = value;
     normalize?.();
     localStorage.setItem(KEY, JSON.stringify(data));
+    if (session?.user?.id) localStorage.setItem(accountCacheKey(session.user.id), JSON.stringify(data));
     selectedId = data.projects?.some(p => p.id === selectedId) ? selectedId : (data.projects?.[0]?.id || null);
     render?.();
     applyingRemote = false;
@@ -126,7 +133,10 @@
       els.authUser.hidden = false;
       els.authEmail.textContent = session.user.email || '로그인됨';
       setSync('불러오는 중…', 'saving');
-      pendingLocal = cloneData(data);
+      const cached = localStorage.getItem(accountCacheKey(userId));
+      let cachedData = null;
+      try { cachedData = cached ? JSON.parse(cached) : null; } catch (_) {}
+      pendingLocal = hasLocalData(data) ? cloneData(data) : (cachedData || cloneData(data));
 
       try {
         const cloud = await fetchCloud();
@@ -216,8 +226,30 @@
     signup(els.authEmailInput.value.trim(), els.authPasswordInput.value);
   };
   els.logoutBtn.onclick = async () => {
-    await client?.auth.signOut();
-    toast?.('로그아웃했어요. 이 기기의 기록은 계속 남아 있어요.');
+    const userId = session?.user?.id;
+    if (userId) {
+      // 계정 기록은 복구용 사용자 전용 캐시에 보관하고, 가능하면 로그아웃 전에 클라우드에도 저장합니다.
+      localStorage.setItem(accountCacheKey(userId), JSON.stringify(data));
+      await writeCloud(data, true);
+    }
+
+    const { error } = await client?.auth.signOut();
+    if (error) {
+      console.error(error);
+      return toast?.('로그아웃하지 못했어요. 잠시 후 다시 시도해주세요.');
+    }
+
+    // 공용 기기에서 이전 사용자의 프로젝트와 일지가 보이지 않도록 화면용 로컬 데이터를 비웁니다.
+    data = emptyData();
+    selectedId = null;
+    editingId = null;
+    currentView = 'dashboard';
+    localStorage.removeItem(KEY);
+    normalize?.();
+    render?.();
+    showAuth(true);
+    setMessage('안전하게 로그아웃했어요.', 'ok');
+    toast?.('로그아웃했어요. 다시 로그인하면 계정 기록을 불러와요.');
   };
   els.migrationUploadBtn.onclick = async () => {
     showMigration(false);
