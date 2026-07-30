@@ -1,10 +1,9 @@
-const CACHE_NAME = 'todaysant-v2-0';
+const CACHE_NAME = 'todaysant-v2.4';
 const APP_SHELL = [
   './',
   './index.html',
   './css/style.css',
   './js/app.js',
-  './js/config.js',
   './js/cloud.js',
   './SETUP_KO.md',
   './supabase-setup.sql',

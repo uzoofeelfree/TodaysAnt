@@ -99,5 +99,5 @@ grant execute on function public.admin_user_list() to authenticated;
 
 -- 반드시 이메일을 바꾸세요.
 insert into public.admin_users(user_id)
-select id from auth.users where email = 'woojueon@gmail.com'
+select id from auth.users where email = 'ADMIN_EMAIL@example.com'
 on conflict (user_id) do nothing;

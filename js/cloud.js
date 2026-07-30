@@ -16,6 +16,14 @@
   let applyingRemote = false;
   let lastCloudUpdatedAt = '';
   let pendingLocal = null;
+  let beginSessionId = '';
+  let beginInFlight = null;
+
+  const migrationKey = userId => `todaysant:migration-resolved:v1:${userId}`;
+  const migrationResolved = userId => Boolean(localStorage.getItem(migrationKey(userId)));
+  const rememberMigration = (userId, choice) => {
+    localStorage.setItem(migrationKey(userId), JSON.stringify({ choice, resolvedAt: new Date().toISOString() }));
+  };
 
   const setMessage = (message, type = '') => {
     els.authMessage.textContent = message || '';
@@ -103,36 +111,61 @@
   }
 
   async function beginSignedIn(nextSession) {
-    session = nextSession;
-    els.authCopy.hidden = true;
-    els.authOpenBtn.hidden = true;
-    els.authUser.hidden = false;
-    els.authEmail.textContent = session.user.email || '로그인됨';
-    setSync('불러오는 중…', 'saving');
-    pendingLocal = cloneData(data);
-    try {
-      const cloud = await fetchCloud();
-      if (cloud?.data && hasLocalData(pendingLocal) && JSON.stringify(cloud.data) !== JSON.stringify(pendingLocal)) {
-        els.migrationSummary.textContent = `이 기기에 프로젝트 ${pendingLocal.projects?.length || 0}개가 있어요. 어떤 기록을 사용할지 선택해주세요.`;
-        showMigration(true);
-      } else if (cloud?.data) {
-        applyData(cloud.data);
-        setSync('동기화 완료', 'ok');
-      } else if (hasLocalData(pendingLocal)) {
-        await writeCloud(pendingLocal, true);
-      } else {
-        await writeCloud(data, true);
+    const userId = nextSession?.user?.id;
+    if (!userId) return;
+
+    // Supabase가 초기화 과정에서 같은 세션 이벤트를 두 번 보낼 수 있어요.
+    // 동일 사용자의 동기화 시작을 한 번으로 합쳐 팝업 중복 표시를 막습니다.
+    if (beginSessionId === userId && beginInFlight) return beginInFlight;
+    beginSessionId = userId;
+
+    beginInFlight = (async () => {
+      session = nextSession;
+      els.authCopy.hidden = true;
+      els.authOpenBtn.hidden = true;
+      els.authUser.hidden = false;
+      els.authEmail.textContent = session.user.email || '로그인됨';
+      setSync('불러오는 중…', 'saving');
+      pendingLocal = cloneData(data);
+
+      try {
+        const cloud = await fetchCloud();
+        const differs = cloud?.data && hasLocalData(pendingLocal) &&
+          JSON.stringify(cloud.data) !== JSON.stringify(pendingLocal);
+
+        if (differs && !migrationResolved(userId)) {
+          els.migrationSummary.textContent = `이 기기에 프로젝트 ${pendingLocal.projects?.length || 0}개가 있어요. 한 번 선택하면 이 기기에서는 다시 묻지 않아요.`;
+          showMigration(true);
+        } else if (cloud?.data) {
+          // 최초 선택이 끝난 기기는 클라우드를 기준으로 조용히 동기화합니다.
+          applyData(cloud.data);
+          setSync('동기화 완료', 'ok');
+        } else if (hasLocalData(pendingLocal)) {
+          await writeCloud(pendingLocal, true);
+          rememberMigration(userId, 'local');
+        } else {
+          await writeCloud(data, true);
+          rememberMigration(userId, 'cloud');
+        }
+        startRealtime();
+      } catch (error) {
+        console.error(error);
+        setSync('설정 필요', 'error');
+        toast?.('Supabase 테이블 설정을 확인해주세요.');
       }
-      startRealtime();
-    } catch (error) {
-      console.error(error);
-      setSync('설정 필요', 'error');
-      toast?.('Supabase 테이블 설정을 확인해주세요.');
+    })();
+
+    try {
+      await beginInFlight;
+    } finally {
+      beginInFlight = null;
     }
   }
 
   function signedOut() {
     session = null;
+    beginSessionId = '';
+    beginInFlight = null;
     stopRealtime();
     els.authCopy.hidden = false;
     els.authOpenBtn.hidden = false;
@@ -189,6 +222,8 @@
   els.migrationUploadBtn.onclick = async () => {
     showMigration(false);
     await writeCloud(pendingLocal || data);
+    if (session?.user?.id) rememberMigration(session.user.id, 'local');
+    pendingLocal = null;
     setSync('기존 기록 업로드 완료', 'ok');
   };
   els.migrationCloudBtn.onclick = async () => {
@@ -196,6 +231,8 @@
     try {
       const cloud = await fetchCloud();
       if (cloud?.data) applyData(cloud.data);
+      if (session?.user?.id) rememberMigration(session.user.id, 'cloud');
+      pendingLocal = null;
       setSync('클라우드 기록 사용 중', 'ok');
     } catch (error) {
       console.error(error);
