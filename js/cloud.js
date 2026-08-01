@@ -19,6 +19,7 @@
   let beginSessionId = '';
   let beginInFlight = null;
   let syncReady = false;
+  let pendingRemoteData = null;
 
   const migrationKey = userId => `todaysant:migration-resolved:v1:${userId}`;
   const accountCacheKey = userId => `todaysant:account-cache:v1:${userId}`;
@@ -54,36 +55,58 @@
       (value.profile?.greeting && !value.profile.greeting.includes('안녕하세요!')))
   );
   const cloneData = value => JSON.parse(JSON.stringify(value));
-  const applyData = value => {
+  const hasRunningTimer = () => Boolean(data?.projects?.some(p => p?.runningSince));
+  const transientTimerMap = () => new Map((data?.projects || []).map(p => [String(p.id), {
+    sessionMs: Number(p.sessionMs) || 0,
+    runningSince: p.runningSince || null
+  }]));
+  const cloudSnapshot = value => {
+    const copy = cloneData(value);
+    // 현재 세션과 실행 상태는 기기 로컬 상태입니다. 클라우드에는 저장 완료된 누적 기록만 보냅니다.
+    copy.activeId = null;
+    copy.projects = (copy.projects || []).map(p => ({ ...p, sessionMs: 0, runningSince: null }));
+    return copy;
+  };
+  const applyData = (value, options = {}) => {
     if (!value || typeof value !== 'object') return;
 
-    // 늦게 도착한 클라우드 데이터가 이 기기에서 이미 시작한 타이머를 덮어쓰지 않게 합니다.
+    // 집중 모드/일반 화면에서 타이머가 도는 동안에는 원격 전체 상태 적용을 미룹니다.
+    // 원격 데이터가 runningSince=null인 예전 스냅샷으로 현재 타이머를 멈추는 문제를 막습니다.
+    if (!options.force && hasRunningTimer()) {
+      pendingRemoteData = cloneData(value);
+      setSync('현재 작업 후 동기화', 'saving');
+      return;
+    }
+
     const localActiveId = data?.activeId || null;
-    const localActive = localActiveId ? data?.projects?.find(p => p.id === localActiveId) : null;
-    const localTimer = localActive?.runningSince ? {
-      id: localActive.id,
-      runningSince: localActive.runningSince,
-      sessionMs: Number(localActive.sessionMs) || 0
-    } : null;
+    const localTimers = transientTimerMap();
+    const localSelectedId = selectedId;
 
     applyingRemote = true;
     data = cloneData(value);
-
-    if (localTimer) {
-      const remoteProject = data.projects?.find(p => p.id === localTimer.id);
-      if (remoteProject) {
-        remoteProject.runningSince = localTimer.runningSince;
-        remoteProject.sessionMs = localTimer.sessionMs;
-        data.activeId = localTimer.id;
-      }
+    data.projects = (data.projects || []).map(p => {
+      const local = localTimers.get(String(p.id));
+      return local ? { ...p, sessionMs: local.sessionMs, runningSince: local.runningSince } : p;
+    });
+    if (localActiveId && data.projects.some(p => String(p.id) === String(localActiveId))) {
+      data.activeId = localActiveId;
     }
 
     normalize?.();
     localStorage.setItem(KEY, JSON.stringify(data));
     if (session?.user?.id) localStorage.setItem(accountCacheKey(session.user.id), JSON.stringify(data));
-    selectedId = data.projects?.some(p => p.id === selectedId) ? selectedId : (data.projects?.[0]?.id || null);
+    selectedId = data.projects?.some(p => String(p.id) === String(localSelectedId))
+      ? localSelectedId
+      : (data.projects?.[0]?.id || null);
     render?.();
     applyingRemote = false;
+  };
+  const flushPendingRemote = () => {
+    if (!pendingRemoteData || hasRunningTimer()) return;
+    const next = pendingRemoteData;
+    pendingRemoteData = null;
+    applyData(next, { force: true });
+    setSync('동기화 완료', 'ok');
   };
 
   async function fetchCloud() {
@@ -99,7 +122,7 @@
     setSync('저장 중…', 'saving');
     const { data: row, error } = await client.from('app_data').upsert({
       user_id: session.user.id,
-      data: cloneData(value),
+      data: cloudSnapshot(value),
       updated_at: new Date().toISOString()
     }, { onConflict: 'user_id' }).select('updated_at').single();
     if (error) {
@@ -114,6 +137,7 @@
 
   function queueSave(value) {
     if (!session || applyingRemote) return;
+    flushPendingRemote();
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => writeCloud(value, true), 700);
   }
@@ -124,6 +148,7 @@
   }
 
   function startRealtime() {
+    pendingRemoteData = null;
     stopRealtime();
     if (!session) return;
     channel = client.channel(`todaysant-${session.user.id}`)
@@ -297,7 +322,12 @@
     }
   };
 
-  window.TodaysAntCloud = { queueSave, writeCloud, timerReady: () => !session || syncReady };
+  window.TodaysAntCloud = {
+    queueSave,
+    writeCloud,
+    timerReady: () => !session || syncReady,
+    flushPendingRemote
+  };
 
   if (!configured || !window.supabase?.createClient) {
     els.authPanel.classList.add('needs-config');

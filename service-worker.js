@@ -1,4 +1,4 @@
-const CACHE_NAME = 'todaysant-v2-3-2-timer-sync';
+const CACHE_NAME = 'todaysant-v2-3-3-focus-timer';
 const APP_SHELL = [
   './',
   './index.html',
