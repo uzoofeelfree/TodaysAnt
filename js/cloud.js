@@ -18,6 +18,7 @@
   let pendingLocal = null;
   let beginSessionId = '';
   let beginInFlight = null;
+  let syncReady = false;
 
   const migrationKey = userId => `todaysant:migration-resolved:v1:${userId}`;
   const accountCacheKey = userId => `todaysant:account-cache:v1:${userId}`;
@@ -55,8 +56,28 @@
   const cloneData = value => JSON.parse(JSON.stringify(value));
   const applyData = value => {
     if (!value || typeof value !== 'object') return;
+
+    // 늦게 도착한 클라우드 데이터가 이 기기에서 이미 시작한 타이머를 덮어쓰지 않게 합니다.
+    const localActiveId = data?.activeId || null;
+    const localActive = localActiveId ? data?.projects?.find(p => p.id === localActiveId) : null;
+    const localTimer = localActive?.runningSince ? {
+      id: localActive.id,
+      runningSince: localActive.runningSince,
+      sessionMs: Number(localActive.sessionMs) || 0
+    } : null;
+
     applyingRemote = true;
-    data = value;
+    data = cloneData(value);
+
+    if (localTimer) {
+      const remoteProject = data.projects?.find(p => p.id === localTimer.id);
+      if (remoteProject) {
+        remoteProject.runningSince = localTimer.runningSince;
+        remoteProject.sessionMs = localTimer.sessionMs;
+        data.activeId = localTimer.id;
+      }
+    }
+
     normalize?.();
     localStorage.setItem(KEY, JSON.stringify(data));
     if (session?.user?.id) localStorage.setItem(accountCacheKey(session.user.id), JSON.stringify(data));
@@ -128,6 +149,7 @@
 
     beginInFlight = (async () => {
       session = nextSession;
+      syncReady = false;
       els.authCopy.hidden = true;
       els.authOpenBtn.hidden = true;
       els.authUser.hidden = false;
@@ -158,7 +180,9 @@
           rememberMigration(userId, 'cloud');
         }
         startRealtime();
+        syncReady = true;
       } catch (error) {
+        syncReady = true;
         console.error(error);
         setSync('설정 필요', 'error');
         toast?.('Supabase 테이블 설정을 확인해주세요.');
@@ -174,6 +198,7 @@
 
   function signedOut() {
     session = null;
+    syncReady = true;
     beginSessionId = '';
     beginInFlight = null;
     stopRealtime();
@@ -272,7 +297,7 @@
     }
   };
 
-  window.TodaysAntCloud = { queueSave, writeCloud };
+  window.TodaysAntCloud = { queueSave, writeCloud, timerReady: () => !session || syncReady };
 
   if (!configured || !window.supabase?.createClient) {
     els.authPanel.classList.add('needs-config');
