@@ -324,3 +324,18 @@ body.focus-active{overflow:hidden}
 /* v2.5 daily work records & statistics */
 .day-select{width:auto;min-width:160px}.stats-note{margin-top:14px;padding:12px 14px;border:1px solid #ddd8ff;border-radius:14px;background:#f7f5ff;color:var(--muted);font-size:12px;line-height:1.6}.daily-stats-strip{display:flex;gap:9px;align-items:flex-end;margin-top:14px;padding:14px;border:1px solid var(--line);border-radius:16px;background:#fbfbff;overflow-x:auto}.daily-stat-chip{border:1px solid var(--line);background:#fff;border-radius:13px;min-width:82px;padding:9px 8px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:5px;cursor:pointer;color:var(--ink)}.daily-stat-chip.active{border-color:#8d7cf2;box-shadow:0 0 0 2px #ece8ff}.daily-stat-chip span,.daily-stat-chip small{font-size:10px;color:var(--muted);white-space:nowrap}.daily-stat-chip strong{font-size:11px;white-space:nowrap}.daily-stat-chip i{width:22px;min-height:4px;border-radius:6px 6px 2px 2px;background:linear-gradient(180deg,#a17cff,#6557e8)}.journal-empty-note{margin-top:9px;padding:10px 12px;border-radius:11px;background:#f5f4f9;color:var(--muted);font-size:12px}.journal-day-group{padding:13px}.journal-subentry{margin-top:9px;padding-top:9px;border-top:1px solid var(--line)}.journal-subentry .journal-text{margin:0;flex:1}.journal-delete-link{border:0;background:transparent;color:#9b6670;font-size:11px;font-weight:800;padding:3px 5px;cursor:pointer}.journal-delete-link:hover{text-decoration:underline;color:#b94e62}
 @media(max-width:700px){.day-select{width:100%}.daily-stats-strip{padding:10px}.daily-stat-chip{min-width:74px}.stats-toolbar{align-items:stretch}.period-tabs{width:100%}.period-btn{flex:1;padding:9px 7px}}
+
+/* v2.6 project completion / archive */
+.project-status-tabs{display:flex;gap:8px;margin:16px 0 14px;padding:4px;background:#f4f2fb;border-radius:14px;width:max-content;max-width:100%}
+.project-status-tab{border:0;background:transparent;color:var(--muted);font-weight:850;padding:9px 15px;border-radius:11px;cursor:pointer;white-space:nowrap}
+.project-status-tab b{font-size:11px;margin-left:4px;opacity:.78}
+.project-status-tab.active{background:#fff;color:#5748dc;box-shadow:0 3px 12px rgba(58,48,120,.10)}
+.btn.complete{background:#e8f7ee!important;color:#167447!important;border:1px solid #bfe5ce!important;box-shadow:none!important}
+.btn.complete:hover{background:#dcf2e5!important}
+.complete-toggle{color:#4d7560!important;border-color:#cde2d5!important}
+.subtle-danger{background:#fff!important;color:#9f6570!important;border:1px solid #ead9dd!important;box-shadow:none!important}
+.subtle-danger:hover{background:#fff5f6!important;color:#b64d60!important}
+.completed-chip{background:#eaf8ef!important;color:#27754c!important;border-color:#cce8d7!important}
+.completion-banner{margin:14px 0;padding:13px 15px;border:1px solid #cce8d7;border-radius:15px;background:#f0faf4;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.completion-banner>div{display:flex;flex-direction:column;gap:4px}.completion-banner strong{color:#1f7047}.completion-banner span{font-size:12px;color:#5e7669}
+@media(max-width:700px){.project-status-tabs{width:100%}.project-status-tab{flex:1}.completion-banner{align-items:flex-start;flex-direction:column}.completion-banner .btn{width:100%}}
