@@ -1,4 +1,4 @@
-const CACHE_NAME = 'todaysant-v2-6';
+const CACHE_NAME = 'todaysant-v2-6-1';
 const APP_SHELL = [
   './',
   './index.html',
