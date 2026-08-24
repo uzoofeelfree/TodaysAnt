@@ -295,6 +295,8 @@
     editingId = null;
     currentView = 'dashboard';
     localStorage.removeItem(KEY);
+    localStorage.removeItem('todaysant-current-timer-v3');
+    localStorage.removeItem('todaysant-current-timer-v2');
     normalize?.();
     render?.();
     showAuth(true);
